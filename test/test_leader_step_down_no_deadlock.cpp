@@ -225,15 +225,21 @@ TEST_F(LeaderStepDownNoDeadlockTest, StepDownWithPendingClosures) {
     teardown_node();
 }
 
-// FSM is simply slow (usleep per entry).
+// FSM is simply slow (usleep per entry) until set_fast() is called.
 class SimpleFSM : public braft::StateMachine {
 public:
     void on_apply(braft::Iterator& iter) override {
-        for (; iter.valid(); iter.next()) { ::usleep(500); }  // ~2000 entries/sec
+        for (; iter.valid(); iter.next()) {
+            if (!_fast.load()) { ::usleep(500); }  // ~2000 entries/sec until disabled
+        }
     }
     void on_leader_start(int64_t _term) override  {}
     void on_leader_stop(const butil::Status& _status) override {}
     void on_shutdown() override {}
+
+    void set_fast() { _fast.store(true); }
+private:
+    std::atomic<bool> _fast{false};
 };
 
 struct SlowApplyArg {
@@ -269,7 +275,8 @@ static void* slow_apply_fn(void* arg) {
 // Apply() caller bthreads keep running when step_down fires. This creates another deadlock:
 // step_down holds node._mutex while calling push_rq; apply() callers block on node._mutex.
 TEST_F(LeaderStepDownNoDeadlockTest, StepDownWithConcurrentApply) {
-    setup_node(50083, "/tmp/sad_data", "sad_group", new SimpleFSM);
+    auto* fsm = new SimpleFSM;
+    setup_node(50083, "/tmp/sad_data", "sad_group", fsm);
 
     auto stop_flag = std::make_shared<std::atomic<bool>>(false);
     std::vector<std::shared_ptr<std::atomic<int>>> pendings;
@@ -305,6 +312,9 @@ TEST_F(LeaderStepDownNoDeadlockTest, StepDownWithConcurrentApply) {
         << "DEADLOCK: step_down did not complete within 10s. "
            "push_rq is spinning with workers blocked on NodeImpl._mutex.";
     if (HasFailure()) { exit(1); }
+
+    // Step_down succeeded — let the FSM drain its committed backlog at full speed.
+    fsm->set_fast();
 
     stop_flag->store(true);
     for (auto t : bthreads) { bthread_join(t, nullptr); }
