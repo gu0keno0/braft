@@ -605,7 +605,7 @@ struct NodeOptions {
     bool witness = false;
 
     // If true, flush done closures after leader step down.
-    // Default: false
+    // Default: true
     bool flush_done_closures_after_step_down = true;
 
     // Construct a default instance
