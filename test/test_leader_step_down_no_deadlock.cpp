@@ -192,7 +192,7 @@ protected:
 // when workers pick them up and block in get_status(), push_rq can't drain.
 TEST_F(LeaderStepDownNoDeadlockTest, StepDownWithPendingClosures) {
     auto* fsm = new SlowFSM;
-    setup_node(50082, "/tmp/cqd_data", "cqd_group", fsm);
+    setup_node(20082, "/tmp/cqd_data", "cqd_group", fsm);
 
     auto stop_flag = std::make_shared<std::atomic<bool>>(false);
     std::vector<std::shared_ptr<std::atomic<int>>> pendings;
@@ -276,7 +276,7 @@ static void* slow_apply_fn(void* arg) {
 // step_down holds node._mutex while calling push_rq; apply() callers block on node._mutex.
 TEST_F(LeaderStepDownNoDeadlockTest, StepDownWithConcurrentApply) {
     auto* fsm = new SimpleFSM;
-    setup_node(50083, "/tmp/sad_data", "sad_group", fsm);
+    setup_node(20083, "/tmp/sad_data", "sad_group", fsm);
 
     auto stop_flag = std::make_shared<std::atomic<bool>>(false);
     std::vector<std::shared_ptr<std::atomic<int>>> pendings;
